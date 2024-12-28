@@ -3,19 +3,6 @@
 This project leverages MySQL to analyze the Netflix dataset, aiming to uncover trends, insights, and patterns about Netflix's movie and TV show offerings. The dataset, `netflix_titles.csv`, contains comprehensive information about Netflix's catalog, including title details, ratings, release years, genres, and more.
 
 ---
-
-## Table of Contents
-1. [About the Project](#about-the-project)
-2. [Dataset Description](#dataset-description)
-3. [Objectives and Analysis](#objectives-and-analysis)
-4. [Key Features](#key-features)
-5. [Technologies Used](#technologies-used)
-6. [SQL Queries Overview](#SQL-Queries-Overview)
-7. [Challenges and Learnings](#Challenges-and-Learnings)
-8. [Contact](#Contact)
-
----
-
 ## About the Project
 
 Netflix, one of the leading content streaming platforms globally, boasts a rich and diverse collection of movies and TV shows. This project seeks to explore and analyze Netflix's offerings through SQL queries to generate meaningful insights, such as:
@@ -24,34 +11,6 @@ Netflix, one of the leading content streaming platforms globally, boasts a rich 
 - Key actors and their contributions to Netflix's content library.
 
 This project demonstrates the use of MySQL for exploratory data analysis (EDA) and advanced querying techniques.
-
----
-
-## Dataset Description
-
-The dataset used in this project is a cleaned and structured version of Netflix's public data. Below are the key columns and their descriptions:
-
-| Column Name    | Description                                                                                   |
-|----------------|-----------------------------------------------------------------------------------------------|
-| `show_id`      | Unique identifier for each show.                                                             |
-| `type`         | Content type: Movie or TV Show.                                                              |
-| `title`        | Title of the content.                                                                        |
-| `director`     | Director(s) of the content.                                                                  |
-| `cast`         | Cast members featured in the content.                                                        |
-| `country`      | Country of origin for the content.                                                           |
-| `date_added`   | Date when the content was added to Netflix.                                                  |
-| `release_year` | Year the content was originally released.                                                    |
-| `rating`       | Maturity rating of the content (e.g., PG, TV-MA).                                            |
-| `duration`     | Length of the content (in minutes for movies or number of seasons for TV shows).             |
-| `listed_in`    | Categories/genres the content belongs to.                                                    |
-| `description`  | Short synopsis or description of the content.                                                |
-
-### Sample Data
-
-| show_id | type    | title                  | director           | cast                      | country        | date_added | release_year | rating | duration | listed_in                        | description                                                                                         |
-|---------|---------|------------------------|--------------------|---------------------------|----------------|------------|--------------|--------|----------|----------------------------------|-----------------------------------------------------------------------------------------------------|
-| s1      | Movie   | Dick Johnson Is Dead  | Kirsten Johnson    |                           | United States  | 25-Sep-21  | 2020         | PG-13  | 90 min   | Documentaries                   | As her father nears the end of his life, filmmaker Kirsten Johnson stages his death in comical ways.|
-| s2      | TV Show | Blood & Water         |                    | Ama Qamata, Khosi Ngema  | South Africa   | 24-Sep-21  | 2021         | TV-MA  | 2 Seasons | International TV Shows, TV Dramas, TV Mysteries | After crossing paths at a party, a Cape Town teen sets out to uncover her sister’s abduction.        |
 
 ---
 
@@ -85,6 +44,173 @@ The main objectives of this project include:
 
 ---
 
+## Database Schema Creation and Data Loading
+### 1. Creating Database & Tables
+```sql
+-- Create a database and table for storing Netflix movies and shows data
+CREATE DATABASE netflix_movies;
+USE netflix_movies;
+
+-- Create a table to store Netflix content details
+CREATE TABLE `net_title` (
+  `show_id` varchar(10) NULL,
+  `type` varchar(10) NULL,
+  `title` varchar(150) NULL,
+  `director` varchar(208) NULL,
+  `cast` varchar(1000) NULL,
+  `country` varchar(150) NULL,
+  `date_added` varchar(100) NULL,
+  `release_year` BIGINT NULL,
+  `rating` varchar(100) NULL,
+  `duration` varchar(100) NULL,
+  `listed_in` varchar(100) NULL,
+  `description` varchar(1000) NULL
+);
+```
+### 2. Loading Data into Created Tables
+```sql
+-- Load data from a CSV file into the `net_title` table
+LOAD DATA LOCAL INFILE 'D:/Projects/MySQL/4- Netflix Movies/netflix_titles.csv'
+INTO TABLE net_title
+FIELDS TERMINATED BY ","
+ENCLOSED BY '"'
+LINES TERMINATED BY "\n"
+IGNORE 1 ROWS
+(@show_id, @type, @title, @director, @cast, @country, @date_added, @release_year, @rating, @duration, @listed_in, @description)
+SET
+  show_id = NULLIF(@show_id, ''),
+  type = NULLIF(@type, ''),
+  title = NULLIF(@title, ''),
+  director = NULLIF(@director, ''),
+  cast = NULLIF(@cast, ''),
+  country = NULLIF(@country, ''),
+  date_added = NULLIF(@date_added, ''),
+  release_year = NULLIF(@release_year, ''),
+  rating = NULLIF(@rating, ''),
+  duration = NULLIF(@duration, ''),
+  listed_in = NULLIF(@listed_in, ''),
+  description = NULLIF(@description, '');
+
+-- Update the `date_added` column to the correct date format
+UPDATE net_title
+SET date_added = STR_TO_DATE(date_added, "%M %d,%Y");
+
+-- Change the `date_added` column type to `DATE`
+ALTER TABLE net_title
+MODIFY COLUMN date_added DATE;
+```
+
+### Some Advanced SQL Queries
+### 1. Categorize content based on keywords 'kill' and 'violence' in the description
+```sql
+SELECT
+    cate_movie,
+    COUNT(cate_movie)
+FROM (
+    SELECT
+        show_id,
+        description,
+        CASE 
+            WHEN description LIKE "%Kill%" THEN "Bad"
+            WHEN description LIKE "%Violence%" THEN "Bad" 
+            ELSE "Good"
+        END AS cate_movie
+    FROM
+        net_title
+) AS cate_table
+GROUP BY 
+    cate_movie;
+-- This query categorizes content as 'Bad' if keywords like 'kill' or 'violence' appear in the description, otherwise labels it as 'Good', and counts the number of items in each category.
+```
+
+### 2. Find how many movies actor 'Salman Khan' appeared in during the last 10 years
+```sql
+SELECT
+    REGEXP_SUBSTR(cast, "Salman Khan") AS actor,
+    COUNT(show_id) AS num_movies
+FROM
+    net_title
+WHERE
+    cast LIKE "%Salman Khan%"
+    AND release_year BETWEEN (SELECT MAX(release_year) FROM net_title) - 10 
+                         AND (SELECT MAX(release_year) FROM net_title)
+GROUP BY
+    1;
+-- This query counts the number of movies featuring 'Salman Khan' released in the past 10 years.
+```
+
+### 3. Find each year and the average number of content items released in India on Netflix
+```sql
+SELECT
+    YEAR(date_added) AS year,
+    COUNT(show_id) AS num_cont,
+    ROUND((COUNT(show_id) / (SELECT COUNT(*) FROM net_title WHERE country LIKE "%India%")) * 100, 2) AS avg_per_year
+FROM
+    net_title
+WHERE
+    country LIKE "%India%"
+GROUP BY 1
+ORDER BY 1 DESC;
+-- This query calculates the yearly content count and its percentage of all Indian content on Netflix.
+```
+### 4. Find the most common rating for movies and TV Shows
+```sql
+SELECT 
+    *
+FROM (
+    SELECT
+        `type`,
+        rating,
+        COUNT(rating) AS common_rate,
+        ROW_NUMBER() OVER (PARTITION BY type ORDER BY COUNT(rating) DESC) AS rnk
+    FROM
+        net_title
+    GROUP BY
+        `type`, rating
+) AS rank_table
+WHERE
+    rnk = 1;
+-- This query lists the top 5 countries by the number of content items available, excluding null values.
+```
+
+### 5. Find content added in the last 5 years
+```sql
+SELECT
+    *
+FROM
+    net_title
+WHERE
+    date_added BETWEEN (SELECT DATE_SUB(MAX(date_added), INTERVAL 5 YEAR) FROM net_title) 
+                    AND (SELECT MAX(date_added) FROM net_title);
+-- This query retrieves all content added to Netflix in the past 5 years from the most recent `date_added`.
+```
+
+### 6. Identify the longest movie
+```sql
+SELECT 
+    title,
+    SUM(SUBSTRING(duration, 1, LENGTH(duration) - 4)) AS movie_len
+FROM
+    net_title
+WHERE
+    type = "Movie"
+GROUP BY 
+    title
+ORDER BY 2 DESC
+LIMIT 1;
+-- This query finds the longest movie based on the duration column.
+```
+
+--- 
+
+## Challenges and Learnings
+
+### Challenges:
+- Handling missing or null values in columns such as `director` and `cast`.
+- Parsing and extracting meaningful insights from unstructured text fields like `duration` and `description`.
+- Ensuring accurate data type conversions (e.g., converting `date_added` to a valid date format).
+---
+
 ## Technologies Used
 
 - **MySQL**: For database management and querying.
@@ -93,55 +219,6 @@ The main objectives of this project include:
 
 ---
 
-## SQL Queries Overview
-
-This project features 14+ SQL queries designed to provide insights into Netflix's content catalog. Below is an overview of the key queries and their objectives:
-
-1. **Content Distribution**:
-   - Count the number of Movies vs TV Shows on Netflix.
-
-2. **Rating Trends**:
-   - Identify the most common rating for movies and TV shows.
-
-3. **Release Year Insights**:
-   - List all movies released in a specific year (e.g., 2020).
-
-4. **Top Content-Producing Countries**:
-   - Find the top 5 countries with the most content on Netflix.
-
-5. **Longest Movie Analysis**:
-   - Identify the longest movie in Netflix's catalog.
-
-6. **Recent Additions**:
-   - Find content added in the last 5 years.
-
-7. **Director and Actor Focus**:
-   - List all movies/TV shows by specific directors (e.g., *Rajiv Chilaka*).
-   - Analyze the contribution of notable actors (e.g., *Salman Khan*).
-
-8. **Multi-Season TV Shows**:
-   - List all TV shows with more than 5 seasons.
-
-9. **Genre and Category Analysis**:
-   - Count content items based on genres (`listed_in` field).
-
-10. **Content Categorization**:
-    - Categorize titles as "Good" or "Bad" based on the presence of keywords (e.g., "kill," "violence").
-
----
-
-## Challenges and Learnings
-
-### Challenges:
-- Handling missing or null values in columns such as `director` and `cast`.
-- Parsing and extracting meaningful insights from unstructured text fields like `duration` and `description`.
-- Ensuring accurate data type conversions (e.g., converting `date_added` to a valid date format).
-
-### Learnings:
-- Leveraged advanced SQL techniques like **window functions**, **string manipulation**, and **conditional aggregation** to extract insights.
-- Gained deeper insights into Netflix's global content strategies and trends.
-
----
 ## Contact
 
 If you have any questions or suggestions regarding this project, feel free to reach out:
